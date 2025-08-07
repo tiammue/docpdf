@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [1.0.0] - 2025-01-08
 
 ### Added
-- Initial release of Document Converter
+- Initial release of docpdf
 - GUI application with tkinter interface
 - DOC/DOCX to PDF conversion using docx2pdf library
 - PDF to DOCX conversion using pypdf library

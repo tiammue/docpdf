@@ -1,6 +1,6 @@
-# Contributing to Document Converter
+# Contributing to docpdf
 
-Thank you for your interest in contributing to Document Converter! This document provides guidelines for contributing to the project.
+Thank you for your interest in contributing to docpdf! This document provides guidelines for contributing to the project.
 
 ## Getting Started
 
@@ -19,19 +19,19 @@ Thank you for your interest in contributing to Document Converter! This document
 
 ### Installation
 ```bash
-git clone https://github.com/yourusername/document-converter.git
-cd document-converter
+git clone https://github.com/tiammue/docpdf.git
+cd docpdf
 pip install -r requirements.txt
 ```
 
 ### Running the Application
 ```bash
-python document_converter.py
+python docpdf.py
 ```
 
 ### Building the Executable
 ```bash
-python -m PyInstaller --onefile --windowed --name "DocumentConverter" document_converter.py
+python -m PyInstaller --onefile --windowed --name "docpdf" docpdf.py
 ```
 
 ## Code Style
