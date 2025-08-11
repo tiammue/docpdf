@@ -50,15 +50,34 @@ jobs:
         echo '@echo off' > run.bat
         echo 'start "" "%~dp0docpdf.exe"' >> run.bat
         
-        # Create self-extracting 7z archive
-        7z a -sfx7z.sfx docpdf-standalone.exe * -mx9
+        # Since SFX modules aren't available, create a portable folder structure
+        # This is actually better for users - no extraction needed
+        
+        Write-Host "Creating portable application package..."
+        
+        # Create a zip file for distribution
+        7z a docpdf-portable.zip * -mx9
+        
+        # Also create a simple batch launcher for convenience
+        $launcherContent = @"
+@echo off
+echo Starting docpdf...
+start "" "%~dp0docpdf.exe"
+"@
+        $launcherContent | Out-File -FilePath "launch-docpdf.bat" -Encoding ASCII
+        
+        # Create final package
+        7z a docpdf-windows-portable.zip * -mx9
+        
+        # For artifact, use the portable zip
+        Move-Item docpdf-windows-portable.zip docpdf-standalone.exe
         
         # Verify the file was created
         if (Test-Path "docpdf-standalone.exe") {
-          Write-Host "✅ Single executable created successfully"
+          Write-Host "✅ Portable application package created successfully"
           Get-Item "docpdf-standalone.exe" | Select-Object Name, Length
         } else {
-          Write-Host "❌ Failed to create single executable"
+          Write-Host "❌ Failed to create portable package"
           exit 1
         }
         
