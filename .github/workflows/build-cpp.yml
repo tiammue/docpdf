@@ -27,7 +27,7 @@ jobs:
         cache: true
         
     - name: Setup MSVC
-      uses: microsoft/setup-msbuild@v1.3
+      uses: microsoft/setup-msbuild@v2
       
     - name: Configure CMake
       run: |
@@ -48,7 +48,7 @@ jobs:
         windeployqt.exe docpdf.exe --release --no-translations --no-system-d3d-compiler
         
     - name: Create artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: docpdf-windows-x64
         path: deploy/
@@ -61,14 +61,9 @@ jobs:
         
     - name: Upload release asset
       if: github.event_name == 'release'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: docpdf-windows-x64.zip
-        asset_name: docpdf-windows-x64.zip
-        asset_content_type: application/zip
+        files: docpdf-windows-x64.zip
 
   build-linux:
     runs-on: ubuntu-latest
@@ -132,21 +127,16 @@ jobs:
         ./linuxdeploy-x86_64.AppImage --appdir deploy --output appimage
         
     - name: Create artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: docpdf-linux-x64
         path: docpdf-*.AppImage
         
     - name: Upload release asset
       if: github.event_name == 'release'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: docpdf-*.AppImage
-        asset_name: docpdf-linux-x64.AppImage
-        asset_content_type: application/octet-stream
+        files: docpdf-*.AppImage
 
   build-macos:
     runs-on: macos-latest
@@ -186,18 +176,13 @@ jobs:
         mv deploy/docpdf.dmg docpdf-macos-x64.dmg
         
     - name: Create artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: docpdf-macos-x64
         path: docpdf-macos-x64.dmg
         
     - name: Upload release asset
       if: github.event_name == 'release'
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: softprops/action-gh-release@v2
       with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: docpdf-macos-x64.dmg
-        asset_name: docpdf-macos-x64.dmg
-        asset_content_type: application/octet-stream
+        files: docpdf-macos-x64.dmg
