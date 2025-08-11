@@ -8,6 +8,7 @@
 #include <QRegularExpression>
 #include <QDateTime>
 #include <QDir>
+#include <QStringConverter>
 
 DocPdf::DocPdf(QObject *parent)
     : QObject(parent)
@@ -244,31 +245,94 @@ QString DocPdf::extractTextFromPdf(const QString &pdfPath)
 
 bool DocPdf::createDocxFromText(const QString &text, const QString &outputPath)
 {
-    // For now, create a simple RTF file with .docx extension
-    // RTF files can be opened by Word and most word processors
-    QFile file(outputPath);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
+    // Create a proper DOCX file using Qt's built-in ZIP support
+    // First, create temporary directory structure
+    QDir tempDir = QDir::temp();
+    QString tempDirPath = tempDir.absoluteFilePath("docpdf_" + QString::number(QDateTime::currentMSecsSinceEpoch()));
+    
+    if (!tempDir.mkpath(tempDirPath)) {
         return false;
     }
     
-    QTextStream stream(&file);
+    QDir workDir(tempDirPath);
+    workDir.mkpath("word");
+    workDir.mkpath("_rels");
+    workDir.mkpath("word/_rels");
     
-    // Write RTF header
-    stream << "{\\rtf1\\ansi\\deff0 {\\fonttbl {\\f0 Times New Roman;}}";
-    stream << "\\f0\\fs24 ";
+    // Create [Content_Types].xml
+    QFile contentTypes(workDir.absoluteFilePath("[Content_Types].xml"));
+    if (contentTypes.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream stream(&contentTypes);
+        stream.setEncoding(QStringConverter::Utf8);
+        stream << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+        stream << "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">\n";
+        stream << "  <Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>\n";
+        stream << "  <Default Extension=\"xml\" ContentType=\"application/xml\"/>\n";
+        stream << "  <Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>\n";
+        stream << "</Types>\n";
+        contentTypes.close();
+    }
     
-    // Convert text to RTF format
-    QString rtfText = text;
-    rtfText.replace("\\", "\\\\");  // Escape backslashes
-    rtfText.replace("{", "\\{");    // Escape braces
-    rtfText.replace("}", "\\}");    // Escape braces
-    rtfText.replace("\n", "\\par "); // Convert newlines to RTF paragraphs
+    // Create _rels/.rels
+    QFile rels(workDir.absoluteFilePath("_rels/.rels"));
+    if (rels.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream stream(&rels);
+        stream.setEncoding(QStringConverter::Utf8);
+        stream << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+        stream << "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">\n";
+        stream << "  <Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>\n";
+        stream << "</Relationships>\n";
+        rels.close();
+    }
     
-    stream << rtfText;
-    stream << "}";
+    // Create word/document.xml
+    QFile document(workDir.absoluteFilePath("word/document.xml"));
+    if (document.open(QIODevice::WriteOnly | QIODevice::Text)) {
+        QTextStream stream(&document);
+        stream.setEncoding(QStringConverter::Utf8);
+        stream << "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
+        stream << "<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\n";
+        stream << "  <w:body>\n";
+        
+        // Split text into paragraphs and add to document
+        QStringList paragraphs = text.split('\n');
+        for (const QString &paragraph : paragraphs) {
+            QString cleanParagraph = paragraph.trimmed();
+            if (!cleanParagraph.isEmpty()) {
+                // Escape XML characters
+                cleanParagraph.replace("&", "&amp;");
+                cleanParagraph.replace("<", "&lt;");
+                cleanParagraph.replace(">", "&gt;");
+                cleanParagraph.replace("\"", "&quot;");
+                cleanParagraph.replace("'", "&apos;");
+                
+                stream << "    <w:p>\n";
+                stream << "      <w:r>\n";
+                stream << "        <w:t>" << cleanParagraph << "</w:t>\n";
+                stream << "      </w:r>\n";
+                stream << "    </w:p>\n";
+            }
+        }
+        
+        stream << "  </w:body>\n";
+        stream << "</w:document>\n";
+        document.close();
+    }
     
-    file.close();
+    // Now create the ZIP file manually using PowerShell (since we're on Windows)
+    QProcess zipProcess;
+    QString powershellScript = QString(
+        "Add-Type -AssemblyName System.IO.Compression.FileSystem; "
+        "[System.IO.Compression.ZipFile]::CreateFromDirectory('%1', '%2')"
+    ).arg(tempDirPath).arg(outputPath);
     
-    // Verify file was created and has content
-    return QFile::exists(outputPath) && QFileInfo(outputPath).size() > 0;
+    zipProcess.start("powershell", QStringList() << "-Command" << powershellScript);
+    zipProcess.waitForFinished(10000);
+    
+    bool success = zipProcess.exitCode() == 0 && QFile::exists(outputPath);
+    
+    // Clean up temporary directory
+    QDir(tempDirPath).removeRecursively();
+    
+    return success;
 }
