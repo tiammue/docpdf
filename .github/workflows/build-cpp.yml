@@ -64,122 +64,153 @@ jobs:
       with:
         files: docpdf-windows-x64.zip
 
-  build-linux:
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: '6.5.3'
-        host: 'linux'
-        target: 'desktop'
-        cache: true
-        
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cmake build-essential
-        
-    - name: Configure CMake
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
-        
-    - name: Build
-      run: |
-        cd build
-        make -j$(nproc)
-        
-    - name: Create AppImage
-      run: |
-        mkdir -p deploy/usr/bin
-        mkdir -p deploy/usr/share/applications
-        mkdir -p deploy/usr/share/icons/hicolor/256x256/apps
-        
-        # Copy executable
-        cp build/docpdf deploy/usr/bin/
-        
-        # Create desktop file
-        cat > deploy/usr/share/applications/docpdf.desktop << EOF
-        [Desktop Entry]
-        Type=Application
-        Name=docpdf
-        Exec=docpdf
-        Icon=docpdf
-        Categories=Office;
-        EOF
-        
-        # Create simple icon (placeholder)
-        echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" | base64 -d > deploy/usr/share/icons/hicolor/256x256/apps/docpdf.png
-        
-        # Download and use linuxdeploy
-        wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-        chmod +x linuxdeploy-x86_64.AppImage
-        
-        # Create AppImage
-        ./linuxdeploy-x86_64.AppImage --appdir deploy --output appimage
-        
-    - name: Create artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: docpdf-linux-x64
-        path: docpdf-*.AppImage
-        
-    - name: Upload release asset
-      if: github.event_name == 'release'
-      uses: softprops/action-gh-release@v2
-      with:
-        files: docpdf-*.AppImage
+  # build-linux:
+  #   runs-on: ubuntu-latest
+  #   
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
+  #     
+  #   - name: Install Qt
+  #     uses: jurplel/install-qt-action@v3
+  #     with:
+  #       version: '6.5.3'
+  #       host: 'linux'
+  #       target: 'desktop'
+  #       cache: true
+  #       
+  #   - name: Install dependencies
+  #     run: |
+  #       sudo apt-get update
+  #       sudo apt-get install -y cmake build-essential
+  #       
+  #   - name: Configure CMake
+  #     run: |
+  #       mkdir build
+  #       cd build
+  #       cmake .. -DCMAKE_BUILD_TYPE=Release
+  #       
+  #   - name: Build
+  #     run: |
+  #       cd build
+  #       make -j$(nproc)
+  #       
+  #   - name: Create AppImage
+  #     run: |
+  #       mkdir -p deploy/usr/bin
+  #       mkdir -p deploy/usr/share/applications
+  #       mkdir -p deploy/usr/share/icons/hicolor/256x256/apps
+  #       
+  #       # Copy executable
+  #       cp build/docpdf deploy/usr/bin/
+  #       
+  #       # Create desktop file
+  #       cat > deploy/usr/share/applications/docpdf.desktop << EOF
+  #       [Desktop Entry]
+  #       Type=Application
+  #       Name=docpdf
+  #       Exec=docpdf
+  #       Icon=docpdf
+  #       Categories=Office;
+  #       EOF
+  #       
+  #       # Create simple icon (placeholder)
+  #       echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" | base64 -d > deploy/usr/share/icons/hicolor/256x256/apps/docpdf.png
+  #       
+  #       # Download and use linuxdeploy
+  #       wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+  #       chmod +x linuxdeploy-x86_64.AppImage
+  #       
+  #       # Create AppImage
+  #       ./linuxdeploy-x86_64.AppImage --appdir deploy --output appimage
+  #       
+  #   - name: Create artifact
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: docpdf-linux-x64
+  #       path: docpdf-*.AppImage
+  #       
+  #   - name: Upload release asset
+  #     if: github.event_name == 'release'
+  #     uses: softprops/action-gh-release@v2
+  #     with:
+  #       files: docpdf-*.AppImage
 
-  build-macos:
-    runs-on: macos-latest
-    
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: '6.5.3'
-        host: 'mac'
-        target: 'desktop'
-        cache: true
-        
-    - name: Configure CMake
-      run: |
-        mkdir build
-        cd build
-        cmake .. -DCMAKE_BUILD_TYPE=Release
-        
-    - name: Build
-      run: |
-        cd build
-        make -j$(sysctl -n hw.ncpu)
-        
-    - name: Create DMG
-      run: |
-        mkdir -p deploy
-        cp -r build/docpdf.app deploy/
-        
-        # Use macdeployqt to bundle Qt libraries
-        macdeployqt deploy/docpdf.app -dmg
-        
-        mv deploy/docpdf.dmg docpdf-macos-x64.dmg
-        
-    - name: Create artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: docpdf-macos-x64
-        path: docpdf-macos-x64.dmg
-        
-    - name: Upload release asset
-      if: github.event_name == 'release'
-      uses: softprops/action-gh-release@v2
-      with:
-        files: docpdf-macos-x64.dmg
+  #   runs-on: macos-latest
+  #   
+  #   steps:
+  #   - name: Checkout code
+  #     uses: actions/checkout@v4
+  #     
+  #   - name: Install Qt
+  #     uses: jurplel/install-qt-action@v3
+  #     with:
+  #       version: '6.5.3'
+  #       host: 'mac'
+  #       target: 'desktop'
+  #       cache: true
+  #       
+  #   - name: Configure CMake
+  #     run: |
+  #       mkdir build
+  #       cd build
+  #       cmake .. -DCMAKE_BUILD_TYPE=Release
+  #       
+  #   - name: Build
+  #     run: |
+  #       cd build
+  #       make -j$(sysctl -n hw.ncpu)
+  #       
+  #   - name: Create DMG
+  #     run: |
+  #       mkdir -p deploy
+  #       
+  #       # Check if we have an app bundle or regular executable
+  #       if [ -d "build/docpdf.app" ]; then
+  #         cp -r build/docpdf.app deploy/
+  #         macdeployqt deploy/docpdf.app -dmg
+  #         mv deploy/docpdf.dmg docpdf-macos-x64.dmg
+  #       else
+  #         # Create a simple app bundle structure
+  #         mkdir -p deploy/docpdf.app/Contents/MacOS
+  #         mkdir -p deploy/docpdf.app/Contents/Resources
+  #         
+  #         # Copy executable
+  #         cp build/docpdf deploy/docpdf.app/Contents/MacOS/
+  #         
+  #         # Create Info.plist
+  #         cat > deploy/docpdf.app/Contents/Info.plist << EOF
+  #       <?xml version="1.0" encoding="UTF-8"?>
+  #       <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+  #       <plist version="1.0">
+  #       <dict>
+  #           <key>CFBundleExecutable</key>
+  #           <string>docpdf</string>
+  #           <key>CFBundleIdentifier</key>
+  #           <string>com.docpdf.app</string>
+  #           <key>CFBundleName</key>
+  #           <string>docpdf</string>
+  #           <key>CFBundleVersion</key>
+  #           <string>1.0.0</string>
+  #           <key>CFBundlePackageType</key>
+  #           <string>APPL</string>
+  #       </dict>
+  #       </plist>
+  #       EOF
+  #         
+  #         # Use macdeployqt to bundle Qt libraries and create DMG
+  #         macdeployqt deploy/docpdf.app -dmg
+  #         mv deploy/docpdf.dmg docpdf-macos-x64.dmg
+  #       fi
+  #       
+  #   - name: Create artifact
+  #     uses: actions/upload-artifact@v4
+  #     with:
+  #       name: docpdf-macos-x64
+  #       path: docpdf-macos-x64.dmg
+  #       
+  #   - name: Upload release asset
+  #     if: github.event_name == 'release'
+  #     uses: softprops/action-gh-release@v2
+  #     with:
+  #       files: docpdf-macos-x64.dmg
