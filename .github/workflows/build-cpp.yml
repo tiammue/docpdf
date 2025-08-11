@@ -39,30 +39,45 @@ jobs:
         cd build
         cmake --build . --config Release
         
-    - name: Deploy Qt
+    - name: Deploy Qt and create single executable
       run: |
         mkdir deploy
         copy build\Release\docpdf.exe deploy\
         cd deploy
         windeployqt.exe docpdf.exe --release --no-translations --no-system-d3d-compiler
         
+        # Create a batch file to run the app
+        echo '@echo off' > run.bat
+        echo 'start "" "%~dp0docpdf.exe"' >> run.bat
+        
+        # Create self-extracting 7z archive
+        7z a -sfx7z.sfx docpdf-standalone.exe * -mx9
+        
+        # Verify the file was created
+        if (Test-Path "docpdf-standalone.exe") {
+          Write-Host "✅ Single executable created successfully"
+          Get-Item "docpdf-standalone.exe" | Select-Object Name, Length
+        } else {
+          Write-Host "❌ Failed to create single executable"
+          exit 1
+        }
+        
     - name: Create artifact
       uses: actions/upload-artifact@v4
       with:
         name: docpdf-windows-x64
-        path: deploy/
+        path: deploy/docpdf-standalone.exe
         
     - name: Create release asset
       if: github.event_name == 'release'
       run: |
-        cd deploy
-        7z a ../docpdf-windows-x64.zip *
+        copy deploy\docpdf-standalone.exe docpdf-windows-x64.exe
         
     - name: Upload release asset
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v2
       with:
-        files: docpdf-windows-x64.zip
+        files: docpdf-windows-x64.exe
 
   # build-linux:
   #   runs-on: ubuntu-latest
