@@ -23,7 +23,11 @@ set(HEADERS
 
 qt_add_executable(docpdf ${SOURCES} ${HEADERS})
 
-target_link_libraries(docpdf Qt6::Core Qt6::Widgets)
+target_link_libraries(docpdf 
+    PRIVATE 
+    Qt6::Core 
+    Qt6::Widgets
+)
 
 # Windows-specific settings
 if(WIN32)
