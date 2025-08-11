@@ -59,11 +59,11 @@ jobs:
         7z a docpdf-portable.zip * -mx9
         
         # Also create a simple batch launcher for convenience
-        $launcherContent = @"
+        $launcherContent = '@
 @echo off
 echo Starting docpdf...
 start "" "%~dp0docpdf.exe"
-"@
+@'
         $launcherContent | Out-File -FilePath "launch-docpdf.bat" -Encoding ASCII
         
         # Create final package
