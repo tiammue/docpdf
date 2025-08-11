@@ -1,0 +1,52 @@
+name: Test Build
+
+on:
+  workflow_dispatch:  # Allow manual trigger
+  push:
+    paths:
+      - '**.cpp'
+      - '**.h'
+      - 'CMakeLists.txt'
+      - '.github/workflows/**'
+
+jobs:
+  quick-test:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '6.5.3'
+        host: 'windows'
+        target: 'desktop'
+        arch: 'win64_msvc2019_64'
+        modules: 'qtbase qtwidgets'
+        cache: true
+        
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.3
+      
+    - name: Test CMake Configuration
+      run: |
+        mkdir build
+        cd build
+        cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+        
+    - name: Test Build
+      run: |
+        cd build
+        cmake --build . --config Release --verbose
+        
+    - name: Verify Executable
+      run: |
+        if (Test-Path "build\Release\docpdf.exe") {
+          Write-Host "✅ Executable created successfully"
+          Get-Item "build\Release\docpdf.exe" | Select-Object Name, Length, LastWriteTime
+        } else {
+          Write-Host "❌ Executable not found"
+          exit 1
+        }

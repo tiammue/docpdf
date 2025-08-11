@@ -1,0 +1,203 @@
+name: Build C++ Qt Application
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  release:
+    types: [ created ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '6.5.3'
+        host: 'windows'
+        target: 'desktop'
+        arch: 'win64_msvc2019_64'
+        modules: 'qtbase qtwidgets'
+        cache: true
+        
+    - name: Setup MSVC
+      uses: microsoft/setup-msbuild@v1.3
+      
+    - name: Configure CMake
+      run: |
+        mkdir build
+        cd build
+        cmake .. -G "Visual Studio 17 2022" -A x64 -DCMAKE_BUILD_TYPE=Release
+        
+    - name: Build
+      run: |
+        cd build
+        cmake --build . --config Release
+        
+    - name: Deploy Qt
+      run: |
+        mkdir deploy
+        copy build\Release\docpdf.exe deploy\
+        cd deploy
+        windeployqt.exe docpdf.exe --release --no-translations --no-system-d3d-compiler
+        
+    - name: Create artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: docpdf-windows-x64
+        path: deploy/
+        
+    - name: Create release asset
+      if: github.event_name == 'release'
+      run: |
+        cd deploy
+        7z a ../docpdf-windows-x64.zip *
+        
+    - name: Upload release asset
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: docpdf-windows-x64.zip
+        asset_name: docpdf-windows-x64.zip
+        asset_content_type: application/zip
+
+  build-linux:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '6.5.3'
+        host: 'linux'
+        target: 'desktop'
+        modules: 'qtbase qtwidgets'
+        cache: true
+        
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential
+        
+    - name: Configure CMake
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        
+    - name: Build
+      run: |
+        cd build
+        make -j$(nproc)
+        
+    - name: Create AppImage
+      run: |
+        mkdir -p deploy/usr/bin
+        mkdir -p deploy/usr/share/applications
+        mkdir -p deploy/usr/share/icons/hicolor/256x256/apps
+        
+        # Copy executable
+        cp build/docpdf deploy/usr/bin/
+        
+        # Create desktop file
+        cat > deploy/usr/share/applications/docpdf.desktop << EOF
+        [Desktop Entry]
+        Type=Application
+        Name=docpdf
+        Exec=docpdf
+        Icon=docpdf
+        Categories=Office;
+        EOF
+        
+        # Create simple icon (placeholder)
+        echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==" | base64 -d > deploy/usr/share/icons/hicolor/256x256/apps/docpdf.png
+        
+        # Download and use linuxdeploy
+        wget https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+        chmod +x linuxdeploy-x86_64.AppImage
+        
+        # Create AppImage
+        ./linuxdeploy-x86_64.AppImage --appdir deploy --output appimage
+        
+    - name: Create artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: docpdf-linux-x64
+        path: docpdf-*.AppImage
+        
+    - name: Upload release asset
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: docpdf-*.AppImage
+        asset_name: docpdf-linux-x64.AppImage
+        asset_content_type: application/octet-stream
+
+  build-macos:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '6.5.3'
+        host: 'mac'
+        target: 'desktop'
+        modules: 'qtbase qtwidgets'
+        cache: true
+        
+    - name: Configure CMake
+      run: |
+        mkdir build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+        
+    - name: Build
+      run: |
+        cd build
+        make -j$(sysctl -n hw.ncpu)
+        
+    - name: Create DMG
+      run: |
+        mkdir -p deploy
+        cp -r build/docpdf.app deploy/
+        
+        # Use macdeployqt to bundle Qt libraries
+        macdeployqt deploy/docpdf.app -dmg
+        
+        mv deploy/docpdf.dmg docpdf-macos-x64.dmg
+        
+    - name: Create artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: docpdf-macos-x64
+        path: docpdf-macos-x64.dmg
+        
+    - name: Upload release asset
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: docpdf-macos-x64.dmg
+        asset_name: docpdf-macos-x64.dmg
+        asset_content_type: application/octet-stream
