@@ -23,7 +23,6 @@ jobs:
         host: 'windows'
         target: 'desktop'
         arch: 'win64_msvc2019_64'
-        modules: 'qtbase qtwidgets'
         cache: true
         
     - name: Setup MSVC
@@ -78,7 +77,6 @@ jobs:
         version: '6.5.3'
         host: 'linux'
         target: 'desktop'
-        modules: 'qtbase qtwidgets'
         cache: true
         
     - name: Install dependencies
@@ -151,7 +149,6 @@ jobs:
         version: '6.5.3'
         host: 'mac'
         target: 'desktop'
-        modules: 'qtbase qtwidgets'
         cache: true
         
     - name: Configure CMake
