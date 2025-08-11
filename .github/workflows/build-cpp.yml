@@ -39,61 +39,47 @@ jobs:
         cd build
         cmake --build . --config Release
         
-    - name: Deploy Qt and create single executable
+    - name: Deploy Qt and create portable application
       run: |
         mkdir deploy
         copy build\Release\docpdf.exe deploy\
         cd deploy
         windeployqt.exe docpdf.exe --release --no-translations --no-system-d3d-compiler
         
-        # Create a batch file to run the app
-        echo '@echo off' > run.bat
-        echo 'start "" "%~dp0docpdf.exe"' >> run.bat
-        
-        # Since SFX modules aren't available, create a portable folder structure
-        # This is actually better for users - no extraction needed
-        
-        Write-Host "Creating portable application package..."
-        
-        # Create a zip file for distribution
-        7z a docpdf-portable.zip * -mx9
-        
-        # Also create a simple batch launcher for convenience
+        # Create a batch launcher for convenience
         echo '@echo off' > launch-docpdf.bat
         echo 'echo Starting docpdf...' >> launch-docpdf.bat
         echo 'start "" "%~dp0docpdf.exe"' >> launch-docpdf.bat
         
-        # Create final package
-        7z a docpdf-windows-portable.zip * -mx9
+        # Create README for users
+        echo 'docpdf - Portable Application' > README.txt
+        echo '' >> README.txt
+        echo 'To run the application:' >> README.txt
+        echo '1. Double-click docpdf.exe' >> README.txt
+        echo '2. Or use launch-docpdf.bat' >> README.txt
+        echo '' >> README.txt
+        echo 'This is a portable application - no installation required.' >> README.txt
         
-        # For artifact, use the portable zip
-        Move-Item docpdf-windows-portable.zip docpdf-standalone.exe
-        
-        # Verify the file was created
-        if (Test-Path "docpdf-standalone.exe") {
-          Write-Host "✅ Portable application package created successfully"
-          Get-Item "docpdf-standalone.exe" | Select-Object Name, Length
-        } else {
-          Write-Host "❌ Failed to create portable package"
-          exit 1
-        }
+        Write-Host "✅ Portable application created successfully"
+        Get-ChildItem | Select-Object Name, Length
         
     - name: Create artifact
       uses: actions/upload-artifact@v4
       with:
-        name: docpdf-windows-x64
-        path: deploy/docpdf-standalone.exe
+        name: docpdf-windows-x64-portable
+        path: deploy/
         
     - name: Create release asset
       if: github.event_name == 'release'
       run: |
-        copy deploy\docpdf-standalone.exe docpdf-windows-x64.exe
+        cd deploy
+        7z a ../docpdf-windows-x64-portable.zip * -mx9
         
     - name: Upload release asset
       if: github.event_name == 'release'
       uses: softprops/action-gh-release@v2
       with:
-        files: docpdf-windows-x64.exe
+        files: docpdf-windows-x64-portable.zip
 
   # build-linux:
   #   runs-on: ubuntu-latest
