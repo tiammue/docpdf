@@ -14,11 +14,13 @@ set(SOURCES
     main.cpp
     mainwindow.cpp
     docpdf.cpp
+    miniz.c
 )
 
 set(HEADERS
     mainwindow.h
     docpdf.h
+    miniz.h
 )
 
 qt_add_executable(docpdf ${SOURCES} ${HEADERS})
