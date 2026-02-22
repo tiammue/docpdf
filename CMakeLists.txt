@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find Qt6 components
-find_package(Qt6 REQUIRED COMPONENTS Core Widgets)
+find_package(Qt6 REQUIRED COMPONENTS Core Widgets PrintSupport)
 
 # Enable Qt6 features
 qt_standard_project_setup()
@@ -29,6 +29,7 @@ target_link_libraries(docpdf
     PRIVATE 
     Qt6::Core 
     Qt6::Widgets
+    Qt6::PrintSupport
 )
 
 # Windows-specific settings

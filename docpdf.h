@@ -6,6 +6,7 @@
 #include <QStringList>
 #include <QDir>
 #include <QFileInfo>
+#include <QTextDocument>
 
 class DocPdf : public QObject
 {
@@ -26,10 +27,20 @@ signals:
 private:
     QStringList findDocFiles(const QString &directory);
     QStringList findPdfFiles(const QString &directory);
+
+    // Internal conversion logic
     bool convertSingleDocToPdf(const QString &inputPath, const QString &outputPath);
     bool convertSinglePdfToDocx(const QString &inputPath, const QString &outputPath);
+
+    // DOCX -> PDF Helpers
+    bool readDocxContent(const QString &docxPath, QTextDocument &document);
+    bool parseDocxXml(const QByteArray &xmlData, QTextDocument &document);
+
+    // PDF -> DOCX Helpers
     QString extractTextFromPdf(const QString &pdfPath);
     bool createDocxFromText(const QString &text, const QString &outputPath);
+    QByteArray extractPdfStream(const QByteArray &data, int &pos);
+    QByteArray decompressStream(const QByteArray &compressedData);
 };
 
 #endif // DOCPDF_H
