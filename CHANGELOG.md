@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-02-22
+
+### Changed
+- Replaced external dependency on LibreOffice with internal DOCX parser and PDF generator (Qt).
+- Replaced external dependency on Poppler with internal PDF stream decompressor (miniz) and text extractor.
+- Updated build system to require `Qt6::PrintSupport`.
+- Improved portability by removing `system()` calls.
+
 ## [1.0.0] - 2025-01-08
 
 ### Added
