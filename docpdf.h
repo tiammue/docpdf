@@ -19,6 +19,9 @@ public slots:
     void convertDocToPdf(const QString &directory);
     void convertPdfToDocx(const QString &directory);
 
+public:
+    static QString generateDocumentXml(const QString &text);
+
 signals:
     void progress(int current, int total, const QString &filename);
     void finished(int converted, int total, const QString &type);
