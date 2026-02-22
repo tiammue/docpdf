@@ -22,6 +22,7 @@ public:
 private slots:
     void convertDocToPdf();
     void convertPdfToDocx();
+    void selectDirectory();
     void onConversionProgress(int current, int total, const QString &filename);
     void onConversionFinished(int converted, int total, const QString &type);
     void onConversionError(const QString &error);
@@ -36,6 +37,7 @@ private:
     QVBoxLayout *m_mainLayout;
     QLabel *m_titleLabel;
     QLabel *m_dirLabel;
+    QPushButton *m_selectDirButton;
     QHBoxLayout *m_buttonLayout;
     QPushButton *m_docToPdfButton;
     QPushButton *m_pdfToDocxButton;

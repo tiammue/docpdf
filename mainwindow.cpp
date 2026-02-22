@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include <QApplication>
 #include <QDir>
+#include <QFileDialog>
 #include <QMessageBox>
 #include <QFont>
 #include <QStyle>
@@ -60,11 +61,25 @@ void MainWindow::setupUI()
     m_mainLayout->addWidget(m_titleLabel);
     
     // Directory info
+    QHBoxLayout *dirLayout = new QHBoxLayout();
+
     m_dirLabel = new QLabel(QString("Working Directory: %1").arg(QDir(m_currentDir).dirName()), this);
     QFont dirFont("Arial", 10);
     m_dirLabel->setFont(dirFont);
-    m_dirLabel->setAlignment(Qt::AlignCenter);
-    m_mainLayout->addWidget(m_dirLabel);
+    m_dirLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    m_dirLabel->setToolTip(m_currentDir);
+
+    m_selectDirButton = new QPushButton("Change...", this);
+    m_selectDirButton->setToolTip("Change working directory");
+    m_selectDirButton->setFixedWidth(80);
+    connect(m_selectDirButton, &QPushButton::clicked, this, &MainWindow::selectDirectory);
+
+    dirLayout->addStretch();
+    dirLayout->addWidget(m_dirLabel);
+    dirLayout->addWidget(m_selectDirButton);
+    dirLayout->addStretch();
+
+    m_mainLayout->addLayout(dirLayout);
     
     // Buttons
     m_buttonLayout = new QHBoxLayout();
@@ -145,6 +160,17 @@ void MainWindow::updateStatus(const QString &message, const QString &color)
     m_statusLabel->setText(message);
     m_statusLabel->setStyleSheet(QString("color: %1;").arg(color));
     m_logOutput->append(QString("[%1] %2").arg(QTime::currentTime().toString()).arg(message));
+}
+
+void MainWindow::selectDirectory()
+{
+    QString dir = QFileDialog::getExistingDirectory(this, "Select Directory", m_currentDir);
+    if (!dir.isEmpty()) {
+        m_currentDir = dir;
+        m_dirLabel->setText(QString("Working Directory: %1").arg(QDir(m_currentDir).dirName()));
+        m_dirLabel->setToolTip(m_currentDir);
+        updateStatus(QString("Working directory changed to: %1").arg(m_currentDir), "black");
+    }
 }
 
 void MainWindow::convertDocToPdf()
