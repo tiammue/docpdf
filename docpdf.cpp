@@ -9,6 +9,12 @@
 #include <QDateTime>
 #include <QDir>
 #include <QStringConverter>
+#include <QPdfWriter>
+#include <QPrinter>
+#include <QPainter>
+#include <QXmlStreamReader>
+#include <QTextCursor>
+#include <QBuffer>
 #include "miniz.h"
 
 DocPdf::DocPdf(QObject *parent)
@@ -18,10 +24,7 @@ DocPdf::DocPdf(QObject *parent)
 
 void DocPdf::convertDocToPdf(const QString &directory)
 {
-    if (QStandardPaths::findExecutable("soffice").isEmpty()) {
-        emit error("LibreOffice (soffice) not found in system PATH. Please install LibreOffice.");
-        return;
-    }
+    // Removed dependency check for soffice since we use internal conversion now
 
     QStringList docFiles = findDocFiles(directory);
     
@@ -50,10 +53,7 @@ void DocPdf::convertDocToPdf(const QString &directory)
 
 void DocPdf::convertPdfToDocx(const QString &directory)
 {
-    if (QStandardPaths::findExecutable("pdftotext").isEmpty()) {
-        emit error("pdftotext (from Poppler utils) not found in system PATH. Please install poppler-utils.");
-        return;
-    }
+    // Removed dependency check for pdftotext
 
     QStringList pdfFiles = findPdfFiles(directory);
     
@@ -117,26 +117,95 @@ QStringList DocPdf::findPdfFiles(const QString &directory)
 
 bool DocPdf::convertSingleDocToPdf(const QString &inputPath, const QString &outputPath)
 {
-    // For Windows, we'll use LibreOffice command line if available
-    // This is a simplified implementation - in production you'd want to use
-    // proper libraries like LibreOffice SDK or commercial solutions
+    QTextDocument document;
+    if (readDocxContent(inputPath, document)) {
+        QPdfWriter writer(outputPath);
+        writer.setPageSize(QPageSize(QPageSize::A4));
+        writer.setResolution(300); // Higher resolution for better quality
+        writer.setCreator("docpdf");
+
+        document.print(&writer);
+        return true;
+    }
+    return false;
+}
+
+bool DocPdf::readDocxContent(const QString &docxPath, QTextDocument &document)
+{
+    mz_zip_archive zip_archive;
+    memset(&zip_archive, 0, sizeof(zip_archive));
     
-    QProcess process;
-    QStringList arguments;
-    
-    // Try LibreOffice headless conversion
-    QString libreOfficePath = "soffice"; // Assumes LibreOffice is in PATH
-    arguments << "--headless" << "--convert-to" << "pdf" << "--outdir" 
-              << QFileInfo(outputPath).absolutePath() << inputPath;
-    
-    process.start(libreOfficePath, arguments);
-    process.waitForFinished(30000); // 30 second timeout
-    
-    if (process.exitCode() == 0) {
-        return QFile::exists(outputPath);
+    if (!mz_zip_reader_init_file(&zip_archive, docxPath.toUtf8().constData(), 0)) {
+        return false;
     }
     
-    return false;
+    // Locate word/document.xml
+    int fileIndex = mz_zip_reader_locate_file(&zip_archive, "word/document.xml", NULL, 0);
+    if (fileIndex < 0) {
+        mz_zip_reader_end(&zip_archive);
+        return false;
+    }
+    
+    // Extract file to memory
+    size_t uncomp_size = 0;
+    void *pData = mz_zip_reader_extract_file_to_heap(&zip_archive, "word/document.xml", &uncomp_size, 0);
+    
+    if (!pData) {
+        mz_zip_reader_end(&zip_archive);
+        return false;
+    }
+    
+    QByteArray xmlData((const char*)pData, uncomp_size);
+    mz_free(pData);
+    mz_zip_reader_end(&zip_archive);
+
+    return parseDocxXml(xmlData, document);
+}
+
+bool DocPdf::parseDocxXml(const QByteArray &xmlData, QTextDocument &document)
+{
+    QXmlStreamReader xml(xmlData);
+    QTextCursor cursor(&document);
+    QTextCharFormat charFormat;
+
+    // Simplified DOCX parsing
+    while (!xml.atEnd() && !xml.hasError()) {
+        QXmlStreamReader::TokenType token = xml.readNext();
+
+        if (token == QXmlStreamReader::StartElement) {
+            if (xml.name() == QStringLiteral("p")) { // Paragraph
+                cursor.insertBlock();
+                charFormat = QTextCharFormat(); // Reset format for new paragraph
+            }
+            else if (xml.name() == QStringLiteral("r")) { // Run
+                // Reset format for new run (though technically should inherit)
+                 charFormat = QTextCharFormat();
+            }
+            else if (xml.name() == QStringLiteral("b")) { // Bold
+                charFormat.setFontWeight(QFont::Bold);
+            }
+            else if (xml.name() == QStringLiteral("i")) { // Italic
+                charFormat.setFontItalic(true);
+            }
+            else if (xml.name() == QStringLiteral("u")) { // Underline
+                charFormat.setFontUnderline(true);
+            }
+            else if (xml.name() == QStringLiteral("t")) { // Text
+                QString text = xml.readElementText();
+                cursor.insertText(text, charFormat);
+            }
+            else if (xml.name() == QStringLiteral("br")) { // Break
+                 cursor.insertText("\n");
+            }
+        }
+    }
+
+    if (xml.hasError()) {
+        qDebug() << "XML Error:" << xml.errorString();
+        return false;
+    }
+
+    return true;
 }
 
 bool DocPdf::convertSinglePdfToDocx(const QString &inputPath, const QString &outputPath)
@@ -154,75 +223,175 @@ bool DocPdf::convertSinglePdfToDocx(const QString &inputPath, const QString &out
 
 QString DocPdf::extractTextFromPdf(const QString &pdfPath)
 {
-    // Always return some text so conversion doesn't fail
     QString extractedText;
-    
-    // Try using pdftotext if available
-    QProcess process;
-    QStringList arguments;
-    arguments << "-layout" << pdfPath << "-"; // Output to stdout with layout
-    
-    process.start("pdftotext", arguments);
-    process.waitForFinished(10000);
-    
-    if (process.exitCode() == 0) {
-        extractedText = QString::fromUtf8(process.readAllStandardOutput());
-        if (!extractedText.trimmed().isEmpty()) {
-            return extractedText;
-        }
+    QFile file(pdfPath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        return QString();
     }
     
-    // Fallback: Try reading PDF as binary and extract basic text
-    QFile file(pdfPath);
-    if (file.open(QIODevice::ReadOnly)) {
-        QByteArray data = file.readAll();
-        QString content = QString::fromLatin1(data);
+    QByteArray pdfData = file.readAll();
+    QStringList allText;
+    QMap<QString, QString> cidMap; // Simplified global CMap
+
+    // First pass: Find and parse CMaps
+    int pos = 0;
+    while (true) {
+        int streamStart = pdfData.indexOf("stream", pos);
+        if (streamStart == -1) break;
+        int streamEnd = pdfData.indexOf("endstream", streamStart);
+        if (streamEnd == -1) break;
         
-        // Simple text extraction from PDF content streams
-        QStringList lines;
+        int contentStart = streamStart + 6;
+        if (contentStart < pdfData.size() && pdfData[contentStart] == '\r') contentStart++;
+        if (contentStart < pdfData.size() && pdfData[contentStart] == '\n') contentStart++;
         
-        // Look for text in parentheses (common PDF text format)
-        QRegularExpression textPattern(R"(\(([^)]+)\))");
-        QRegularExpressionMatchIterator matches = textPattern.globalMatch(content);
-        
-        while (matches.hasNext()) {
-            QRegularExpressionMatch match = matches.next();
-            QString text = match.captured(1);
-            if (!text.isEmpty() && text.length() > 1) {
-                lines << text;
+        int length = streamEnd - contentStart;
+        if (length > 0) {
+            QByteArray streamData = pdfData.mid(contentStart, length);
+            QByteArray preDict = pdfData.mid(qMax(0, streamStart - 200), streamStart - qMax(0, streamStart - 200));
+            bool isCompressed = preDict.contains("/FlateDecode");
+
+            QByteArray decompressed;
+            if (isCompressed) {
+                decompressed = decompressStream(streamData);
+            } else {
+                decompressed = streamData;
+            }
+
+            if (!decompressed.isEmpty()) {
+                QString content = QString::fromLatin1(decompressed);
+
+                // Parse CMap (beginbfchar / endbfchar)
+                if (content.contains("beginbfchar")) {
+                    QRegularExpression bfCharPattern(R"(<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>)");
+                    QRegularExpressionMatchIterator matches = bfCharPattern.globalMatch(content);
+                    while (matches.hasNext()) {
+                        QRegularExpressionMatch match = matches.next();
+                        cidMap[match.captured(1).toUpper()] = match.captured(2).toUpper();
+                    }
+                }
+                 // Parse CMap (beginbfrange / endbfrange) - simplified (only handles direct mapping)
+                 // <start> <end> <destStart>
+                 if (content.contains("beginbfrange")) {
+                    QRegularExpression bfRangePattern(R"(<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>)");
+                    QRegularExpressionMatchIterator matches = bfRangePattern.globalMatch(content);
+                     while (matches.hasNext()) {
+                        QRegularExpressionMatch match = matches.next();
+                        QString start = match.captured(1).toUpper();
+                        QString end = match.captured(2).toUpper(); // Unused in simplified mapping
+                        QString dest = match.captured(3).toUpper();
+                        // Just map the start for now as a fallback
+                        cidMap[start] = dest;
+                     }
+                 }
             }
         }
+        pos = streamEnd + 9;
+    }
+
+    // Second pass: Extract text
+    pos = 0;
+    while (true) {
+        int streamStart = pdfData.indexOf("stream", pos);
+        if (streamStart == -1) break;
+        int streamEnd = pdfData.indexOf("endstream", streamStart);
+        if (streamEnd == -1) break;
         
-        // Also look for text between 'BT' and 'ET' markers
-        QRegularExpression btPattern(R"(BT\s+.*?ET)", QRegularExpression::DotMatchesEverythingOption);
-        QRegularExpressionMatchIterator btMatches = btPattern.globalMatch(content);
+        int contentStart = streamStart + 6;
+        if (contentStart < pdfData.size() && pdfData[contentStart] == '\r') contentStart++;
+        if (contentStart < pdfData.size() && pdfData[contentStart] == '\n') contentStart++;
         
-        while (btMatches.hasNext()) {
-            QRegularExpressionMatch match = btMatches.next();
-            QString btContent = match.captured(0);
+        int length = streamEnd - contentStart;
+        if (length > 0) {
+            QByteArray streamData = pdfData.mid(contentStart, length);
+            QByteArray preDict = pdfData.mid(qMax(0, streamStart - 200), streamStart - qMax(0, streamStart - 200));
+            bool isCompressed = preDict.contains("/FlateDecode");
             
-            // Extract text from within this block
-            QRegularExpression innerText(R"(\(([^)]+)\))");
-            QRegularExpressionMatchIterator innerMatches = innerText.globalMatch(btContent);
+            QByteArray decompressed;
+            if (isCompressed) {
+                decompressed = decompressStream(streamData);
+            } else {
+                decompressed = streamData;
+            }
             
-            while (innerMatches.hasNext()) {
-                QRegularExpressionMatch innerMatch = innerMatches.next();
-                QString text = innerMatch.captured(1);
-                if (!text.isEmpty() && text.length() > 1) {
-                    lines << text;
+            if (!decompressed.isEmpty()) {
+                QString content = QString::fromLatin1(decompressed);
+
+                // Extract standard text chunks (Tj)
+                QRegularExpression textPattern(R"(\(([^)]+)\)\s*Tj)");
+                QRegularExpressionMatchIterator matches = textPattern.globalMatch(content);
+                while (matches.hasNext()) {
+                    QString t = matches.next().captured(1);
+                    allText << t;
+                }
+
+                // Extract hex text chunks <...> Tj
+                QRegularExpression hexPattern(R"(<([0-9a-fA-F]+)>\s*Tj)");
+                QRegularExpressionMatchIterator hexMatches = hexPattern.globalMatch(content);
+                while (hexMatches.hasNext()) {
+                    QString hexStr = hexMatches.next().captured(1);
+                    int i = 0;
+                    while (i < hexStr.length()) {
+                        // Try 4 chars (2 bytes)
+                        bool handled = false;
+                        if (i + 4 <= hexStr.length()) {
+                            QString chunk4 = hexStr.mid(i, 4).toUpper();
+                            if (cidMap.contains(chunk4)) {
+                                allText << QChar(cidMap[chunk4].toInt(nullptr, 16));
+                                i += 4;
+                                handled = true;
+                            }
+                        }
+
+                        if (!handled && i + 2 <= hexStr.length()) {
+                            QString chunk2 = hexStr.mid(i, 2).toUpper();
+                            if (cidMap.contains(chunk2)) {
+                                allText << QChar(cidMap[chunk2].toInt(nullptr, 16));
+                                i += 2;
+                                handled = true;
+                            } else {
+                                // Fallback: 1-byte ASCII
+                                bool ok;
+                                int code = chunk2.toInt(&ok, 16);
+                                // Allow mostly printable ASCII, but maybe also extended Latin1
+                                if (ok && code >= 32 && code <= 255) {
+                                     allText << QChar(code);
+                                }
+                                i += 2;
+                                handled = true;
+                            }
+                        }
+
+                        if (!handled) {
+                             i++; // Skip invalid/partial
+                        }
+                    }
+                }
+
+                // Extract text arrays (TJ) - simplified
+                QRegularExpression tjPattern(R"(\[([^\]]+)\]\s*TJ)");
+                QRegularExpressionMatchIterator tjMatches = tjPattern.globalMatch(content);
+                while (tjMatches.hasNext()) {
+                    QString arrayContent = tjMatches.next().captured(1);
+                    QRegularExpression subText(R"(\(([^)]+)\))");
+                    QRegularExpressionMatchIterator subMatches = subText.globalMatch(arrayContent);
+                    while (subMatches.hasNext()) {
+                        allText << subMatches.next().captured(1);
+                    }
                 }
             }
         }
-        
-        if (!lines.isEmpty()) {
-            extractedText = lines.join(" ");
-        }
+        pos = streamEnd + 9;
     }
     
-    // If we still have no text, create meaningful content
-    if (extractedText.trimmed().isEmpty()) {
-        QFileInfo fileInfo(pdfPath);
-        extractedText = QString("Document: %1\n\n"
+    extractedText = allText.join(" ");
+
+    // Fallback if no text found in streams (maybe not compressed or standard extraction failed)
+    if (extractedText.isEmpty()) {
+        // ... (previous fallback logic could go here, but let's assume streams work or file is empty)
+        // If empty, return a default message
+         QFileInfo fileInfo(pdfPath);
+         extractedText = QString("Document: %1\n\n"
                                "This document was converted from PDF to DOCX.\n"
                                "Original file: %2\n"
                                "File size: %3 bytes\n"

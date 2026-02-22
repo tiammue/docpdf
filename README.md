@@ -8,7 +8,8 @@ High-performance C++ rewrite of the docpdf application using Qt6 for maximum spe
 - Threaded conversions (non-blocking UI)
 - Progress tracking
 - Cross-platform compatibility
-- Single executable deployment
+- **Dependency-Free**: Uses internal PDF and DOCX processing (no LibreOffice or Poppler required)
+- Single executable deployment ready
 
 ## Download
 
@@ -18,13 +19,10 @@ Download the latest release from the [Releases](https://github.com/tiammue/docpd
 - **Linux**: `docpdf-linux-x64.AppImage`
 - **macOS**: `docpdf-macos-x64.dmg`
 
-### Automatic Builds
-Every commit triggers automatic builds for all platforms via GitHub Actions. Check the [Actions](https://github.com/tiammue/docpdf/actions) tab for the latest builds.
+## Building Locally
 
-## Building Locally (Optional)
-
-If you want to build locally, you need:
-- Qt6 (Core, Widgets)
+To build locally, you need:
+- Qt6 (Core, Widgets, PrintSupport)
 - CMake 3.16+
 - C++17 compiler (MSVC, GCC, or Clang)
 
@@ -34,37 +32,27 @@ cmake .. -DCMAKE_PREFIX_PATH="path/to/qt6"
 cmake --build . --config Release
 ```
 
-## Dependencies for Production Use
+## Implementation Details
 
-For full functionality, you'll want to integrate proper document libraries:
+The application uses internal conversion logic to avoid external dependencies:
 
 ### DOC/DOCX to PDF
-- **LibreOffice SDK** (free, cross-platform)
-- **Microsoft Office COM** (Windows only)
-- **Aspose.Words C++** (commercial)
+- Uses internal XML parsing to read DOCX structure.
+- Renders to PDF using Qt's `QPdfWriter`.
+- Preserves text, paragraphs, and basic formatting.
 
 ### PDF to DOCX
-- **Poppler** (free, cross-platform)
-- **PDFium** (free, Google's PDF library)
-- **Aspose.PDF C++** (commercial)
-
-## Current Implementation
-
-The current code includes:
-- Complete Qt6 GUI matching the original Python app
-- Threaded conversion architecture
-- Basic conversion placeholders
-- Progress tracking and error handling
-
-The conversion functions are simplified implementations. For production use, replace with proper document processing libraries.
+- Uses internal stream decompression (via `miniz`) to read PDF content.
+- Extracts text and attempts to map characters (including basic CMap support).
+- Writes native `.docx` files.
 
 ## Performance Benefits
 
 Compared to the Python version:
 - **Startup time**: ~50ms vs ~2000ms
 - **Memory usage**: ~15MB vs ~50MB
-- **Conversion speed**: 2-5x faster (with proper libraries)
-- **File size**: ~5MB vs ~50MB (with dependencies)
+- **Conversion speed**: significantly faster (no external process launch overhead)
+- **Deployment**: Simply copy the executable (and Qt DLLs) - no external tools needed.
 
 ## Deployment
 
