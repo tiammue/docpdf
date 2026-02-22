@@ -517,3 +517,33 @@ bool DocPdf::createDocxFromText(const QString &text, const QString &outputPath)
 
     return mz_zip_writer_end(&zip_archive);
 }
+
+QByteArray DocPdf::decompressStream(const QByteArray &compressedData)
+{
+    size_t uncompSize = 0;
+    // Try to decompress assuming zlib header first (TINFL_FLAG_PARSE_ZLIB_HEADER)
+    void *pData = tinfl_decompress_mem_to_heap(
+        compressedData.constData(),
+        compressedData.size(),
+        &uncompSize,
+        TINFL_FLAG_PARSE_ZLIB_HEADER
+    );
+
+    if (!pData) {
+        // Fallback: Try raw deflate (no header)
+        pData = tinfl_decompress_mem_to_heap(
+            compressedData.constData(),
+            compressedData.size(),
+            &uncompSize,
+            0
+        );
+    }
+
+    if (pData) {
+        QByteArray result((const char*)pData, uncompSize);
+        mz_free(pData);
+        return result;
+    }
+
+    return QByteArray();
+}
